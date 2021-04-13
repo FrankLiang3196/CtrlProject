@@ -58,6 +58,7 @@ public:
 	float lastVal;//上次位移值
 	float interval;
 
+	int count; //记录循环次数
 	int flag; //用于判断是否为正常阶跃
 	int flag1;//用于判断是否打印过超调量和上升时间
 	int flag2;//用于判断是否打印过稳定时间

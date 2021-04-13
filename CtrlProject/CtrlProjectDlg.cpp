@@ -285,17 +285,13 @@ void CMyCtrlProjectDlg::OnTimer(UINT_PTR nIDEvent)
 	CRect rectPicture;
 	if (signal == 1)//阶跃信号
 	{
+		count += 1;
 		CString tempStr;
 		renVal = (float)ZT7660_AIonce(1, 0, 21, 2, 0, 0, 0, 0, 0, 0, 0) / 40;//对指定通道进行单次数据采集
-		tempStr.Format(_T("%.2f"), renVal);//进行字符串的转换
-		SetDlgItemText(IDC_EDIT5, tempStr);//设置对话框中控件的文本和标题(IDC_LBL_AD21是个对话框)   输出当前位移量
 
 		int ifstep = step_combo.GetCurSel();
 		float stepVal;
 		stepVal = ifstep * stepvalue;
-
-		tempStr.Format(_T("%.2f"), stepVal);//进行字符串的转换
-		SetDlgItemText(IDC_EDIT4, tempStr);
 
 		if (abs(renVal - stepVal) > 0.2 * stepVal)
 		{
@@ -309,17 +305,26 @@ void CMyCtrlProjectDlg::OnTimer(UINT_PTR nIDEvent)
 		integral = Error1 + integral;//积分环节
 
 		float p = Error1 - Error2;
-		Error2 = Error1;//Calculate E(k-1)          
-		tempStr.Format(_T("%.2f"), Error1);//进行字符串的转换
-		SetDlgItemText(IDC_EDIT6, tempStr);//设置对话框中控件的文本和标题(IDC_LBL_ERROR是个对话框)    输出位移差 
+		Error2 = Error1;//Calculate E(k-1)      
 
 		Output = 40 * (Kp * Error1 + Ki * integral + Kd * p);//PID
 		if (Output > 0) Output = Output + 2500;
-		else Output = 1.2 * (Output - 2500); //对返回时添加一个系数平衡
+		else Output = 2 * (Output - 2500); //对返回时添加一个系数平衡
 
 		ZT7660_AOonce(1, 1, 6, Output);//指定某通道模拟量输出一次
-		tempStr.Format(_T("%.2f"), Output);//进行字符串的转换
-		SetDlgItemText(IDC_EDIT10, tempStr);
+
+		//每隔20步输出一次参数
+		if (count % 20) {
+			tempStr.Format(_T("%.2f"), renVal);
+			SetDlgItemText(IDC_EDIT5, tempStr);//输出当前位移量
+			tempStr.Format(_T("%.2f"), stepVal);
+			SetDlgItemText(IDC_EDIT4, tempStr); //输出位移量参考值
+			tempStr.Format(_T("%.2f"), Error1);
+			SetDlgItemText(IDC_EDIT6, tempStr);//输出位移差
+			tempStr.Format(_T("%.2f"), Output);
+			SetDlgItemText(IDC_EDIT10, tempStr);//输出电压
+			count = 0;
+		}
 
 		//将图形绘制在界面上
 		for (int i = 0; i < POINT_COUNT - 1; i++)
@@ -342,55 +347,59 @@ void CMyCtrlProjectDlg::OnTimer(UINT_PTR nIDEvent)
 		DrawWave(m_picDraw.GetDC(), rectPicture);
 	}
 	else {
-			CString tempStr;
-			feedback = 125.0 + peakvalue * sin(frequency*6.28*t);
-			t += (TS/1000);
-			renVal = ZT7660_AIonce(1, 0, 21, 2, 0, 0, 0, 0, 0, 0, 0) / 40;
-			//将图形绘制在界面上
-			for (int i = 0; i < POINT_COUNT - 1; i++)
-			{
-				m_nzValues[i] = m_nzValues[i + 1];
-			}
-			m_nzValues[POINT_COUNT - 1] = renVal;
-			m_picDraw.GetClientRect(&rectPicture);
+		count += 1;
+		CString tempStr;
+		feedback = 125.0 + peakvalue * sin(frequency*6.28*t);
+		t += (TS/250);
+		renVal = ZT7660_AIonce(1, 0, 21, 2, 0, 0, 0, 0, 0, 0, 0) / 40;
 
-			// 绘制波形图   
-			DrawWave(m_picDraw.GetDC(), rectPicture);
-			//绘制原函数
-			for (int i = 0; i < POINT_COUNT - 1; i++)
-			{
-				m_trueValues[i] = m_trueValues[i + 1];
-			}
-			m_trueValues[POINT_COUNT - 1] = feedback;
-			m_picDraw.GetClientRect(&rectPicture);
+		Error1 = feedback - renVal;//Calculate E(k)
+		integral = Error1 + integral;//积分环节
 
-			// 绘制波形图   
-			DrawWave(m_picDraw.GetDC(), rectPicture);
+		float p = Error1 - Error2;
+		Error2 = Error1;//Calculate E(k-1)		
+
+		Output = 40 * (Kp*Error1 + Ki * integral + Kd * p);
+
+		// 设置死区范围为正负2500
+		if (Output > 0) Output = Output + 2500;
+		else Output = 2 * (Output - 2500);
+
+		ZT7660_AOonce(1, 1, 6, Output);
+
+		if (count % 20) {
 			tempStr.Format(_T("%.2f"), renVal);
 			SetDlgItemText(IDC_EDIT5, tempStr);//输出当前位移量
-
-			Error1 = feedback - renVal;//Calculate E(k)
-			integral = Error1 + integral;//积分环节
-
-			float p = Error1 - Error2;
-			Error2 = Error1;//Calculate E(k-1)								  
-			tempStr.Format(_T("%.2f"), Error1);//进行字符串的转换
-			SetDlgItemText(IDC_EDIT6, tempStr);
-
-			Output = 40 * (Kp*Error1 + Ki * integral + Kd * p);
-
-			// 设置死区范围为正负2500
-			if (Output > 0) Output = Output + 2500;
-			else Output = 2 * (Output - 2500);
-
-			ZT7660_AOonce(1, 1, 6, Output);
-			tempStr.Format(_T("%.2f"), Output);//进行字符串的转换
-			SetDlgItemText(IDC_EDIT10, tempStr);
-
-			tempStr.Format(_T("%.2f"), feedback);//进行字符串的转换
-			SetDlgItemText(IDC_EDIT4, tempStr);
+			tempStr.Format(_T("%.2f"), feedback);
+			SetDlgItemText(IDC_EDIT4, tempStr);//输出位移量参考值
+			tempStr.Format(_T("%.2f"), Error1);
+			SetDlgItemText(IDC_EDIT6, tempStr);//输出位移差
+			tempStr.Format(_T("%.2f"), Output);
+			SetDlgItemText(IDC_EDIT10, tempStr);//输出电压
+			count = 0;
+		}
 
 
+		//将图形绘制在界面上
+		for (int i = 0; i < POINT_COUNT - 1; i++)
+		{
+			m_nzValues[i] = m_nzValues[i + 1];
+		}
+		m_nzValues[POINT_COUNT - 1] = renVal;
+		m_picDraw.GetClientRect(&rectPicture);
+
+		// 绘制波形图   
+		DrawWave(m_picDraw.GetDC(), rectPicture);
+		//绘制原函数
+		for (int i = 0; i < POINT_COUNT - 1; i++)
+		{
+			m_trueValues[i] = m_trueValues[i + 1];
+		}
+		m_trueValues[POINT_COUNT - 1] = feedback;
+		m_picDraw.GetClientRect(&rectPicture);
+
+		// 绘制波形图   
+		DrawWave(m_picDraw.GetDC(), rectPicture);
 	}
 	CDialogEx::OnTimer(nIDEvent);
 }
@@ -422,7 +431,8 @@ void CMyCtrlProjectDlg::OnBnClickedButton1() //开始波形对话框
 {
 	// TODO: 在此添加控件通知处理程序代码
 	int   iRadioButton;
-	t = 0;
+	t = 0;//初始化时间
+	count = 0;//初始化循环数
 	CString str_kp, str_ki, str_kd, str_step, str_peak, strf;
 	GetDlgItemText(IDC_EDIT1, str_kp);
 	GetDlgItemText(IDC_EDIT2, str_ki);
