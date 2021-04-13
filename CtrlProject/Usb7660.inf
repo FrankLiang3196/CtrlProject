@@ -1,0 +1,109 @@
+;; USB7660.inf - 中泰研创USB7000数据采集卡驱动信息文件
+;; Copyright (c) 2001-2003 中泰研创， Inc.
+;; http://www.ztic.com.cn
+
+[Version]
+Signature="$CHICAGO$"
+provider=%ProviderName%
+
+Class=ZTIC_USB
+ClassGUID={4ED68D40-22F3-11d7-B879-0050CF0052C8};
+
+[ClassInstall]
+Addreg=Class_AddReg
+
+[ClassInstall32]
+Addreg=Class_AddReg
+
+[Class_AddReg]
+HKR,,,,%DeviceClassName%
+HKR,,Icon,,"-20"
+
+[Manufacturer]
+%HdwrVendor%=HdwrVendor
+
+[HdwrVendor]
+%USB\VID_5A54&PID_7660.DeviceDesc%=USB7660.Dev, USB\VID_5A54&PID_7660
+%USB\VID_5A54&PID_7660.DeviceDesc%=USB7660.Dev, USB\VID_5A54&PID_6600
+"USB7660A"=USB7660.Dev, USB\VID_5A54&PID_6601
+"USB7660B"=USB7660.Dev, USB\VID_5A54&PID_6602
+
+[DestinationDirs]
+USB7660.Files.Ext = 10,System32\Drivers
+USB7660.Files.Inf = 10,INF
+USB7660DEV.Files.Ext = 10,System32\Drivers
+USB7660DEV.Files.Inf = 10,INF
+CopyFiles_DLL = 11   ;win98=System,win2K=System32
+
+[USB7660.Dev]
+CopyFiles=USB7660.Files.Ext, USB7660.Files.Inf, CopyFiles_DLL
+AddReg=USB7660.AddReg
+
+[USB7660.Dev.NT]
+CopyFiles=USB7660.Files.Ext, USB7660.Files.Inf, CopyFiles_DLL
+AddReg=USB7660.AddReg
+
+[USB7660.Dev.NT.Services]
+Addservice = USB7660, 0x00000002, USB7660.AddService
+
+[USB7660.AddService]
+DisplayName    = %USB7660.SvcDesc%
+ServiceType    = 1                  ; SERVICE_KERNEL_DRIVER
+StartType      = 2                  ; SERVICE_AUTO_START
+ErrorControl   = 1                  ; SERVICE_ERROR_NORMAL
+ServiceBinary  = %10%\System32\Drivers\USB7660.sys
+LoadOrderGroup = Base
+
+[USB7660.AddReg]
+HKR,,DevLoader,,*ntkern
+HKR,,NTMPDriver,,USB7660.sys
+
+[USB7660.Files.Ext]
+USB7660.sys
+
+[USB7660.Files.Inf]
+USB7660.Inf
+
+[USB7660DEV.Dev]
+CopyFiles=USB7660DEV.Files.Ext, USB7660DEV.Files.Inf, CopyFiles_DLL
+AddReg=USB7660DEV.AddReg
+
+[USB7660DEV.Dev.NT]
+CopyFiles=USB7660DEV.Files.Ext, USB7660DEV.Files.Inf, CopyFiles_DLL
+AddReg=USB7660DEV.AddReg
+
+[USB7660DEV.Dev.NT.Services]
+Addservice = USB7660DEV, 0x00000002, USB7660DEV.AddService
+
+[USB7660DEV.AddService]
+DisplayName    = %USB7660DEV.SvcDesc%
+ServiceType    = 1                  ; SERVICE_KERNEL_DRIVER
+StartType      = 2                  ; SERVICE_AUTO_START
+ErrorControl   = 1                  ; SERVICE_ERROR_NORMAL
+ServiceBinary  = %10%\System32\Drivers\USB7660.sys
+LoadOrderGroup = Base
+
+[USB7660DEV.AddReg]
+HKR,,DevLoader,,*ntkern
+HKR,,NTMPDriver,,USB7660.sys
+
+[USB7660DEV.Files.Ext]
+USB7660.sys
+
+[USB7660DEV.Files.Inf]
+USB7660.Inf
+
+[CopyFiles_DLL]
+USB7660.dll,,,4  ;replace file=true
+
+;---------------------------------------------------------------;
+
+[Strings]
+ProviderName="北京中泰研创科技有限公司"
+HdwrVendor="中泰研创"
+DeviceClassName="USB7000系列数据采集卡"
+USB\VID_5A54&PID_7660.DeviceDesc="USB7660" 
+
+USB7660.SvcDesc="USB7660"
+USB7660DEV.SvcDesc="USB7000C"
+
