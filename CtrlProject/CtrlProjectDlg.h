@@ -40,9 +40,11 @@ public:
 	float Kd;
 	//我们自己添加的变量
 	float stepvalue; // 定义阶跃响应的幅值
-	float peakvalue = 0; //正弦信号理论幅值
-	float frequency = 0; //正弦信号理论频率
+	float peakvalue; //正弦信号理论幅值
+	float frequency; //正弦信号理论频率
 	float TS; // 周期
+	float sigma;//超调量
+	float ts, tp;//稳定时间，上升时间
 
 	//可能不需要
 	float Error1;//(E(k))
@@ -52,17 +54,15 @@ public:
 	float Output;//输出电平大小
 	float feedback;
 	float t;
-	float sigma;
-	float velocity;
-	float renVal;//当前位移值
-	float lastVal;//上次位移值
-	float interval;
 
-	int count; //记录循环次数
-	int flag; //用于判断是否为正常阶跃
-	int flag1;//用于判断是否打印过超调量和上升时间
-	int flag2;//用于判断是否打印过稳定时间
-	int flag3;
+	float renVal;//当前位移值
+
+	long count; //记录循环次数
+
+	bool isAuto = false;//用于判定是否自动调试PID
+	bool flag; //用于判断是否为正常阶跃
+	bool flag1;//用于判断是否打印过超调量和上升时间
+	bool flag2;//用于判断是否打印过稳定时间
 	int signal;//阶跃1；正弦2；
 	CStatic m_picDraw;
 
@@ -83,17 +83,17 @@ public:
 	afx_msg void OnEnChangeEdit2();
 	afx_msg void OnBnClickedRadio1();
 	afx_msg void OnBnClickedRadio2();
-	CComboBox step_combo;
-	afx_msg void OnCbnSelchangeCombo8();
+	afx_msg void OnEnChangeEdit12();
 	afx_msg void OnBnClickedButton3();
+	CComboBox step_combo;
 
-	afx_msg bool ReturnToInitial();
-	afx_msg void OnEnChangeEdit14();
-
-	bool isMAX();
-	bool isStable();
+	bool isMAX(float Error1, float Error2, float Error3);
+	bool isStable(float Error);
 	void Print_PID();
-	void Print_sigma();
+	//void Print_sigma();
 	void auto_PID();
+	void auto_P();
 	void Stop();
+	void Initialization();
+	void auto_I();
 };

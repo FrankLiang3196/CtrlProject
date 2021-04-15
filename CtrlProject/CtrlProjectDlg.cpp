@@ -91,8 +91,8 @@ BEGIN_MESSAGE_MAP(CMyCtrlProjectDlg, CDialogEx)
 	ON_EN_CHANGE(IDC_EDIT2, &CMyCtrlProjectDlg::OnEnChangeEdit2)
 	ON_BN_CLICKED(IDC_RADIO1, &CMyCtrlProjectDlg::OnBnClickedRadio1)
 	ON_BN_CLICKED(IDC_RADIO2, &CMyCtrlProjectDlg::OnBnClickedRadio2)
+	ON_EN_CHANGE(IDC_EDIT12, &CMyCtrlProjectDlg::OnEnChangeEdit12)
 	ON_BN_CLICKED(IDC_BUTTON3, &CMyCtrlProjectDlg::OnBnClickedButton3)
-	ON_EN_CHANGE(IDC_EDIT14, &CMyCtrlProjectDlg::OnEnChangeEdit14)
 END_MESSAGE_MAP()
 
 
@@ -132,10 +132,12 @@ BOOL CMyCtrlProjectDlg::OnInitDialog()
 	CheckRadioButton(IDC_RADIO1, IDC_RADIO2, NULL);
 	((CButton *)GetDlgItem(IDC_RADIO1))->SetCheck(TRUE);//选上
 
-	TS = 200; 	//设定定时器时间, 单位ms
+	TS = 10; 	//设定定时器时间, 单位ms
 
-	// 启动定时器，ID为1，定时时间为200ms   
-	//SetTimer(1, 200, NULL);
+	CString tempStr;
+	tempStr.Format(_T("请设置参数"));
+	SetDlgItemText(IDC_EDIT14, tempStr);//输出当前比例系数
+
 
 
 	return TRUE;  // return TRUE  unless you set the focus to a control   
@@ -286,25 +288,27 @@ void CMyCtrlProjectDlg::OnTimer(UINT_PTR nIDEvent)
 	if (signal == 1)//阶跃信号
 	{
 		count += 1;
+
 		CString tempStr;
 		renVal = (float)ZT7660_AIonce(1, 0, 21, 2, 0, 0, 0, 0, 0, 0, 0) / 40;//对指定通道进行单次数据采集
 
-		int ifstep = step_combo.GetCurSel();
+		if (count == 1 && abs(renVal) < 10) flag = true; //此时为标准阶跃测试
+
+		int ifstep = step_combo.GetCurSel(); //判断是高电平还是低电平
 		float stepVal;
 		stepVal = ifstep * stepvalue;
 
-		if (abs(renVal - stepVal) > 0.2 * stepVal)
+		if (abs(renVal - stepVal) > 0.1 * stepVal)
 		{
-			integral = 0; // 在0-0.8stepVal时不要积分环节
-			//可以在0-0.8stepVal时增大Kp
+			integral = 0; // 在0-0.9stepVal时不要积分环节
+			//可以在0-0.9stepVal时增大Kp
 		}
 
-		//tempStr.Format(_T("%.2f"), stepVal);//进行字符串的转换
-		//SetDlgItemText(IDC_EDIT8, tempStr);//设置对话框中控件的文本和标题(IDC_LBL_INPUTE是个对话框)   输出当前信号输出
 		Error1 = (stepVal - renVal);//Calculate E(k)
 		integral = Error1 + integral;//积分环节
 
 		float p = Error1 - Error2;
+		Error3 = Error2;
 		Error2 = Error1;//Calculate E(k-1)      
 
 		Output = 40 * (Kp * Error1 + Ki * integral + Kd * p);//PID
@@ -313,8 +317,8 @@ void CMyCtrlProjectDlg::OnTimer(UINT_PTR nIDEvent)
 
 		ZT7660_AOonce(1, 1, 6, Output);//指定某通道模拟量输出一次
 
-		//每隔20步输出一次参数
-		if (count % 20) {
+		//每隔50步输出一次参数
+		if (count % 50 == 0) {
 			tempStr.Format(_T("%.2f"), renVal);
 			SetDlgItemText(IDC_EDIT5, tempStr);//输出当前位移量
 			tempStr.Format(_T("%.2f"), stepVal);
@@ -323,34 +327,55 @@ void CMyCtrlProjectDlg::OnTimer(UINT_PTR nIDEvent)
 			SetDlgItemText(IDC_EDIT6, tempStr);//输出位移差
 			tempStr.Format(_T("%.2f"), Output);
 			SetDlgItemText(IDC_EDIT10, tempStr);//输出电压
-			count = 0;
 		}
 
-		//将图形绘制在界面上
-		for (int i = 0; i < POINT_COUNT - 1; i++)
-		{
-			m_nzValues[i] = m_nzValues[i + 1];
+		if (isMAX(Error1, Error2, Error3)) {
+			if (flag && !flag1) {
+				sigma = abs(Error1) / stepvalue;
+				tempStr.Format(_T("%.2f"), sigma);//进行字符串的转换
+				SetDlgItemText(IDC_EDIT11, tempStr);//输出超调量
+				tp = t;
+				tempStr.Format(_T("%.2f"), tp);//进行字符串的转换
+				SetDlgItemText(IDC_EDIT12, tempStr);//输出上升时间
+				flag1 = !flag1; //不再执行此程序 1表示已经打印过了
+			}
+			else if (flag && isStable(Error2) && !flag2) {
+				ts = t;
+				tempStr.Format(_T("%.2f"), ts);//进行字符串的转换
+				SetDlgItemText(IDC_EDIT13, tempStr);//打印稳定时间
+				flag2 = !flag2;
+				SetDlgItemText(IDC_EDIT1, tempStr);//输出当前比例系数
+				tempStr.Format(_T("系统已稳定"));
+				SetDlgItemText(IDC_EDIT14, tempStr);//输出当前比例系数
+			}
+			else if (isAuto && isStable(Error2) && count > 500) Stop(); //如果在自动调试PID阶段，满足此条件时停止计时器
 		}
-		m_nzValues[POINT_COUNT - 1] = renVal;
-		m_picDraw.GetClientRect(&rectPicture);
 
-		DrawWave(m_picDraw.GetDC(), rectPicture);
+		//将图形绘制在界面上(5步打印一次图像)
+		if (count % 5 == 0) {
+			for (int i = 0; i < POINT_COUNT - 1; i++)
+			{
+				m_nzValues[i] = m_nzValues[i + 1];
+				m_trueValues[i] = m_trueValues[i + 1];
+			}
+			m_nzValues[POINT_COUNT - 1] = renVal;
+			m_trueValues[POINT_COUNT - 1] = stepVal;
 
-		for (int i = 0; i < POINT_COUNT - 1; i++)
-		{
-			m_trueValues[i] = m_trueValues[i + 1];
+			// 绘制波形图   
+			m_picDraw.GetClientRect(&rectPicture);
+			DrawWave(m_picDraw.GetDC(), rectPicture);
+
+			//绘制原函数
+			m_picDraw.GetClientRect(&rectPicture);
+			DrawWave(m_picDraw.GetDC(), rectPicture);
 		}
-		m_trueValues[POINT_COUNT - 1] = stepVal;
-		m_picDraw.GetClientRect(&rectPicture);
 
-		// 绘制波形图   
-		DrawWave(m_picDraw.GetDC(), rectPicture);
 	}
 	else {
 		count += 1;
 		CString tempStr;
 		feedback = 125.0 + peakvalue * sin(frequency*6.28*t);
-		t += (TS/250);
+		t += (TS/1000);
 		renVal = ZT7660_AIonce(1, 0, 21, 2, 0, 0, 0, 0, 0, 0, 0) / 40;
 
 		Error1 = feedback - renVal;//Calculate E(k)
@@ -367,7 +392,8 @@ void CMyCtrlProjectDlg::OnTimer(UINT_PTR nIDEvent)
 
 		ZT7660_AOonce(1, 1, 6, Output);
 
-		if (count % 20) {
+		//每隔50步输出一次参数
+		if (count % 50 == 0) {
 			tempStr.Format(_T("%.2f"), renVal);
 			SetDlgItemText(IDC_EDIT5, tempStr);//输出当前位移量
 			tempStr.Format(_T("%.2f"), feedback);
@@ -376,30 +402,26 @@ void CMyCtrlProjectDlg::OnTimer(UINT_PTR nIDEvent)
 			SetDlgItemText(IDC_EDIT6, tempStr);//输出位移差
 			tempStr.Format(_T("%.2f"), Output);
 			SetDlgItemText(IDC_EDIT10, tempStr);//输出电压
-			count = 0;
 		}
 
+		//将图形绘制在界面上(5步打印一次图像)
+		if (count % 5 == 0) {
+			for (int i = 0; i < POINT_COUNT - 1; i++)
+			{
+				m_nzValues[i] = m_nzValues[i + 1];
+				m_trueValues[i] = m_trueValues[i + 1];
+			}
+			m_nzValues[POINT_COUNT - 1] = renVal;
+			m_trueValues[POINT_COUNT - 1] = feedback;
 
-		//将图形绘制在界面上
-		for (int i = 0; i < POINT_COUNT - 1; i++)
-		{
-			m_nzValues[i] = m_nzValues[i + 1];
+			// 绘制波形图   
+			m_picDraw.GetClientRect(&rectPicture);
+			DrawWave(m_picDraw.GetDC(), rectPicture);
+
+			//绘制原函数
+			m_picDraw.GetClientRect(&rectPicture);
+			DrawWave(m_picDraw.GetDC(), rectPicture);
 		}
-		m_nzValues[POINT_COUNT - 1] = renVal;
-		m_picDraw.GetClientRect(&rectPicture);
-
-		// 绘制波形图   
-		DrawWave(m_picDraw.GetDC(), rectPicture);
-		//绘制原函数
-		for (int i = 0; i < POINT_COUNT - 1; i++)
-		{
-			m_trueValues[i] = m_trueValues[i + 1];
-		}
-		m_trueValues[POINT_COUNT - 1] = feedback;
-		m_picDraw.GetClientRect(&rectPicture);
-
-		// 绘制波形图   
-		DrawWave(m_picDraw.GetDC(), rectPicture);
 	}
 	CDialogEx::OnTimer(nIDEvent);
 }
@@ -431,8 +453,11 @@ void CMyCtrlProjectDlg::OnBnClickedButton1() //开始波形对话框
 {
 	// TODO: 在此添加控件通知处理程序代码
 	int   iRadioButton;
-	t = 0;//初始化时间
-	count = 0;//初始化循环数
+	Kp = 0;
+	Ki = 0;
+	Kd = 0;
+
+	Initialization();
 	CString str_kp, str_ki, str_kd, str_step, str_peak, strf;
 	GetDlgItemText(IDC_EDIT1, str_kp);
 	GetDlgItemText(IDC_EDIT2, str_ki);
@@ -442,12 +467,12 @@ void CMyCtrlProjectDlg::OnBnClickedButton1() //开始波形对话框
 	GetDlgItem(IDC_EDIT9)->GetWindowText(strf);
 
 	iRadioButton = GetCheckedRadioButton(IDC_RADIO1, IDC_RADIO2);
-	if (iRadioButton == IDC_RADIO1)   //若选中控件1，则为6
+	if (iRadioButton == IDC_RADIO1)   //若选中控件1
 	{
 		//MessageBox("Click   Button1"); 
 		signal = 1;
 	}
-	if (iRadioButton == IDC_RADIO2)   //若选中控件2，则为7
+	if (iRadioButton == IDC_RADIO2)   //若选中控件2
 	{
 		// MessageBox("Click   Button2");
 		signal = 2;
@@ -459,11 +484,13 @@ void CMyCtrlProjectDlg::OnBnClickedButton1() //开始波形对话框
 	frequency = _ttof(strf);
 	peakvalue = _ttof(str_peak);
 
-	/*if (ZT7660_OpenDevice(1) != 0) 
+	if (ZT7660_OpenDevice(1) != 0) 
 		AfxMessageBox(_T("fail!"));
-*/
 
-	//srand((unsigned)time(NULL));
+	CString tempStr;
+	tempStr.Format(_T("正在控制..."));
+	SetDlgItemText(IDC_EDIT14, tempStr);//输出当前比例系数
+
 	SetTimer(1, TS, NULL);
 }
 
@@ -479,23 +506,35 @@ void CMyCtrlProjectDlg::Stop()
 	ZT7660_CloseDevice(1);
 	//exit(0);
 	Invalidate(1);
-	memset(m_nzValues, 0, sizeof(int) * POINT_COUNT);
-	memset(m_trueValues, 0, sizeof(int) * POINT_COUNT);
+
+	CString tempStr;
+	tempStr.Format(_T("已停止"));
+	SetDlgItemText(IDC_EDIT14, tempStr);//输出当前比例系数
 
 	KillTimer(1);
+}
 
+void CMyCtrlProjectDlg::Initialization()
+{
+	t = 0;//初始化时间
+	count = 0;//初始化循环数
+	flag = false;
+	flag1 = false;
+	flag2 = false;
 	Error1 = 0;//(E(k))
 	Error2 = 0;//(E(k-1))
 	Error3 = 0;//(E(k-2))
 	integral = 0;//E(k)求和
 	Output = 0;//输出电平大小
-	feedback = 0;
-	t = 0;
-	sigma = 0;
-	velocity = 0;
+	feedback = 0;//正弦的理论值
+	ts = 0;//稳定时间
+	tp = 0;//峰值时间
+	//sigma = 0;//超调量
 	renVal = 0;//当前位移值
-	lastVal = 0;//上次位移值
-	interval = 0;
+	peakvalue = 0; //正弦信号理论幅值
+	frequency = 0; //正弦信号理论频率
+	memset(m_nzValues, 0, sizeof(int) * POINT_COUNT);
+	memset(m_trueValues, 0, sizeof(int) * POINT_COUNT);
 }
 
 void CMyCtrlProjectDlg::OnEnChangeEdit1()
@@ -524,82 +563,32 @@ void CMyCtrlProjectDlg::OnEnChangeEdit2()
 
 void CMyCtrlProjectDlg::OnBnClickedRadio1()
 {
-
+	CString tempStr;
+	tempStr.Format(_T("已选择阶跃信号"));
+	SetDlgItemText(IDC_EDIT14, tempStr);//输出当前比例系数
 }
 
 
 void CMyCtrlProjectDlg::OnBnClickedRadio2()
 {
 	// TODO: 在此添加控件通知处理程序代码
+	CString tempStr;
+	tempStr.Format(_T("已选择正弦信号"));
+	SetDlgItemText(IDC_EDIT14, tempStr);//输出当前比例系数
 }
 
-bool CMyCtrlProjectDlg::ReturnToInitial()
-{
-		int count = 0;
 
-
-		while (!isStable())
-		{
-			renVal = ZT7660_AIonce(1, 0, 21, 2, 0, 0, 0, 0, 0, 0, 0) / 40;
-			Error1 = (0 - renVal);//Calculate E(k)
-			integral = Error1 + integral;//积分环节
-
-			float p = Error1 - Error2;
-			Error2 = Error1;//Calculate E(k-1)          
-
-			Output = 40 * (Kp * Error1 + Ki * integral + Kd * p);//PID
-			ZT7660_AOonce(1, 1, 6, Output);//指定某通道模拟量输出一次
-
-		}
-		return TRUE;
-		//ifreturn = TRUE;
-
-		/*SetDlgItemText(, ifreturn);
-		GetDlgItem(IDC_EDIT15)->SetWindowText(字符数组)*/
-
-
-}
-
-void CMyCtrlProjectDlg::OnBnClickedButton3()
+bool CMyCtrlProjectDlg::isMAX(float Error1, float Error2, float Error3)
 {
 	// TODO: 在此添加控件通知处理程序代码
-
-	ReturnToInitial();
+	if ((Error2 < Error1 && Error2 < Error3) || (Error2 > Error3 && Error2 > Error1)) return true;
+	else return false;
 }
 
-
-void CMyCtrlProjectDlg::OnEnChangeEdit14()
+bool CMyCtrlProjectDlg::isStable(float Error)
 {
-	// TODO:  如果该控件是 RICHEDIT 控件，它将不
-	// 发送此通知，除非重写 CDialogEx::OnInitDialog()
-	// 函数并调用 CRichEditCtrl().SetEventMask()，
-	// 同时将 ENM_CHANGE 标志“或”运算到掩码中。
-
-	// TODO:  在此添加控件通知处理程序代码
-}
-
-
-bool CMyCtrlProjectDlg::isMAX()
-{
-	// TODO: 在此添加控件通知处理程序代码
-	if ((Error2 < Error1 && Error2 < Error3) || (Error2 > Error3 && Error2 > Error1))
-	{
-		return true;
-	}
-	else
-	{
-		return false;
-	}
-}
-
-bool CMyCtrlProjectDlg::isStable()
-{
-	if (isMAX() && abs(Error2) / stepvalue < 0.05)
-	{
-		return true;
-	}
-	else
-		return false;
+	if (abs(Error) < 0.05 * stepvalue + 0.001) return true;
+	else return false;
 }
 
 void CMyCtrlProjectDlg::Print_PID() //打印PID
@@ -613,26 +602,125 @@ void CMyCtrlProjectDlg::Print_PID() //打印PID
 	SetDlgItemText(IDC_EDIT3, tempStr);
 }
 
-void CMyCtrlProjectDlg::Print_sigma() //打印超调量和上升时间以及稳定时间
-{
-	CString tempStr;
-	if (isMAX() && flag == 1 && flag1 == 1)
-	{
-		sigma = abs(Error1) / stepvalue;
-		tempStr.Format(_T("%.2f"), sigma);//进行字符串的转换
-		SetDlgItemText(IDC_EDIT11, tempStr);//超调量
-		tempStr.Format(_T("%.2f"), t);//进行字符串的转换
-		SetDlgItemText(IDC_EDIT12, tempStr);//上升时间
-		flag1 = 0; //不再执行此程序 0表示已经打印过了
-	}
-	if (flag == 1 && flag2 == 1 && isStable())
-	{
-		tempStr.Format(_T("%.2f"), t);//进行字符串的转换
-		SetDlgItemText(IDC_EDIT13, tempStr);//打印稳定时间
-		flag2 = 0;
-	}
-}
+//void CMyCtrlProjectDlg::Print_sigma() //打印超调量和上升时间以及稳定时间
+//{
+//	CString tempStr;
+//	if (isMAX() && flag == 1 && flag1 == 1)
+//	{
+//		sigma = abs(Error1) / stepvalue;
+//		tempStr.Format(_T("%.2f"), sigma);//进行字符串的转换
+//		SetDlgItemText(IDC_EDIT11, tempStr);//超调量
+//		tempStr.Format(_T("%.2f"), t);//进行字符串的转换
+//		SetDlgItemText(IDC_EDIT12, tempStr);//上升时间
+//		flag1 = 0; //不再执行此程序 0表示已经打印过了
+//	}
+//	if (flag == 1 && flag2 == 1 && isStable())
+//	{
+//		tempStr.Format(_T("%.2f"), t);//进行字符串的转换
+//		SetDlgItemText(IDC_EDIT13, tempStr);//打印稳定时间
+//		flag2 = 0;
+//	}
+//}
 void CMyCtrlProjectDlg::auto_PID()
 {
+	isAuto = true;
+	Initialization();
 
+	Kp = 0;
+	Ki = 0;
+	Kd = 0;
+
+	CString tempStr;
+	tempStr.Format(_T("正在调节比例系数"));
+	SetDlgItemText(IDC_EDIT14, tempStr);//输出当前比例系数
+	auto_P();
+	auto_I();
+	isAuto = false;
+}
+
+void CMyCtrlProjectDlg::auto_P() {
+	Kp = 1;
+	CString tempStr;
+	while (sigma < 0.05) {
+		stepvalue = 100;
+		SetTimer(1, TS, NULL);
+
+		tempStr.Format(_T("%.2f"), Kp);
+		SetDlgItemText(IDC_EDIT1, tempStr);//输出当前比例系数
+
+		Initialization();
+		Kp += 0.5;
+		stepvalue = 0;
+		SetTimer(1, TS, NULL);
+		Initialization();
+	}
+	while (sigma > 0) {
+		stepvalue = 100;
+		SetTimer(1, TS, NULL);
+
+		tempStr.Format(_T("%.2f"), Kp);
+		SetDlgItemText(IDC_EDIT1, tempStr);//输出当前比例系数
+
+		Initialization();
+		Kp -= 0.05;
+		SetTimer(1, TS, NULL);
+		Initialization();
+	}
+	Kp *= 0.65;
+
+	tempStr.Format(_T("比例系数调节完成"));
+	SetDlgItemText(IDC_EDIT14, tempStr);//输出当前比例系数
+}
+void CMyCtrlProjectDlg::auto_I() {
+	Ki = 0.05;
+	CString tempStr;
+	while (sigma < 0.05) {  
+		stepvalue = 100;
+		SetTimer(1, TS, NULL);
+		
+		tempStr.Format(_T("%.2f"), Ki);
+		SetDlgItemText(IDC_EDIT2, tempStr);//输出当前比例系数
+
+		Initialization();
+		Ki -= 0.005;
+		stepvalue = 0;
+		SetTimer(1, TS, NULL);
+		Initialization();
+	}
+	while (sigma > 0) {
+		stepvalue = 100;
+		SetTimer(1, TS, NULL);
+
+		tempStr.Format(_T("%.2f"), Ki);
+		SetDlgItemText(IDC_EDIT2, tempStr);//输出当前比例系数
+
+		Initialization();
+		Ki += 0.001;
+		SetTimer(1, TS, NULL);
+		Initialization();
+	}
+	Ki *= 1.5;
+
+	tempStr.Format(_T("比例系数调节完成"));
+	SetDlgItemText(IDC_EDIT14, tempStr);//输出当前比例系数
+}
+
+
+
+
+void CMyCtrlProjectDlg::OnEnChangeEdit12()
+{
+	// TODO:  如果该控件是 RICHEDIT 控件，它将不
+	// 发送此通知，除非重写 CDialogEx::OnInitDialog()
+	// 函数并调用 CRichEditCtrl().SetEventMask()，
+	// 同时将 ENM_CHANGE 标志“或”运算到掩码中。
+
+	// TODO:  在此添加控件通知处理程序代码
+}
+
+
+void CMyCtrlProjectDlg::OnBnClickedButton3()
+{
+	// TODO: 在此添加控件通知处理程序代码
+	auto_PID();
 }
