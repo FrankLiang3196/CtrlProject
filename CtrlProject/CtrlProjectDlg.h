@@ -12,8 +12,8 @@ class CMyCtrlProjectDlg : public CDialogEx
 // 构造
 public:
 	CMyCtrlProjectDlg(CWnd* pParent = nullptr);	// 标准构造函数
-	int m_nzValues[POINT_COUNT];
-	int m_trueValues[POINT_COUNT];
+	float m_nzValues[POINT_COUNT];
+	float m_trueValues[POINT_COUNT];
 // 对话框数据
 #ifdef AFX_DESIGN_TIME
 	enum { IDD = IDD_MYCtrlProject_DIALOG };
@@ -88,8 +88,8 @@ public:
 	CComboBox step_combo;
 
 	bool isMAX(float Error1, float Error2, float Error3);
+	int findMAX(float nums[]);
 	bool isStable(float Error);
-	void Print_PID();
 	//void Print_sigma();
 	void auto_PID();
 	void auto_P();

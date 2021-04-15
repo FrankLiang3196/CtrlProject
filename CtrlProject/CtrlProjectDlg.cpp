@@ -8,6 +8,7 @@
 #include "afxdialogex.h"
 #include "usb7660.H"
 #include "resource.h"
+#include <algorithm>
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -288,6 +289,7 @@ void CMyCtrlProjectDlg::OnTimer(UINT_PTR nIDEvent)
 	if (signal == 1)//阶跃信号
 	{
 		count += 1;
+		t += (TS / 1000);
 
 		CString tempStr;
 		renVal = (float)ZT7660_AIonce(1, 0, 21, 2, 0, 0, 0, 0, 0, 0, 0) / 40;//对指定通道进行单次数据采集
@@ -307,13 +309,42 @@ void CMyCtrlProjectDlg::OnTimer(UINT_PTR nIDEvent)
 		Error1 = (stepVal - renVal);//Calculate E(k)
 		integral = Error1 + integral;//积分环节
 
+		if (isMAX(Error1, Error2, Error3)) {
+			if (flag && !flag1) {
+				sigma = abs(Error1) / stepvalue * 100;
+				tempStr.Format(_T("%.2f"), sigma);//进行字符串的转换
+				SetDlgItemText(IDC_EDIT11, tempStr);//输出超调量
+				tp = t;
+				tempStr.Format(_T("%.2f"), tp);//进行字符串的转换
+				SetDlgItemText(IDC_EDIT12, tempStr);//输出上升时间
+				flag1 = !flag1; //不再执行此程序 1表示已经打印过了
+			}
+			else if (flag && isStable(Error2) && !flag2) {
+
+				int max_i = findMAX(m_nzValues);
+				sigma = abs(m_nzValues[max_i] - stepvalue) / stepvalue * 100;
+				tempStr.Format(_T("%.2f"), sigma);//进行字符串的转换
+				SetDlgItemText(IDC_EDIT11, tempStr);//输出超调量
+				tp = max_i * 5 * TS;
+				tempStr.Format(_T("%.2f"), tp);//进行字符串的转换
+				SetDlgItemText(IDC_EDIT12, tempStr);//输出上升时间
+				ts = t;
+				tempStr.Format(_T("%.2f"), ts);//进行字符串的转换
+				SetDlgItemText(IDC_EDIT13, tempStr);//打印稳定时间
+				flag2 = !flag2;
+				tempStr.Format(_T("系统已稳定"));
+				SetDlgItemText(IDC_EDIT14, tempStr);
+			}
+			else if (isAuto && isStable(Error2) && count > 500) Stop(); //如果在自动调试PID阶段，满足此条件时停止计时器
+		}
+
 		float p = Error1 - Error2;
 		Error3 = Error2;
 		Error2 = Error1;//Calculate E(k-1)      
 
 		Output = 40 * (Kp * Error1 + Ki * integral + Kd * p);//PID
 		if (Output > 0) Output = Output + 2500;
-		else Output = 2 * (Output - 2500); //对返回时添加一个系数平衡
+		else Output = Output - 2500; //对返回时添加一个系数平衡
 
 		ZT7660_AOonce(1, 1, 6, Output);//指定某通道模拟量输出一次
 
@@ -327,28 +358,6 @@ void CMyCtrlProjectDlg::OnTimer(UINT_PTR nIDEvent)
 			SetDlgItemText(IDC_EDIT6, tempStr);//输出位移差
 			tempStr.Format(_T("%.2f"), Output);
 			SetDlgItemText(IDC_EDIT10, tempStr);//输出电压
-		}
-
-		if (isMAX(Error1, Error2, Error3)) {
-			if (flag && !flag1) {
-				sigma = abs(Error1) / stepvalue;
-				tempStr.Format(_T("%.2f"), sigma);//进行字符串的转换
-				SetDlgItemText(IDC_EDIT11, tempStr);//输出超调量
-				tp = t;
-				tempStr.Format(_T("%.2f"), tp);//进行字符串的转换
-				SetDlgItemText(IDC_EDIT12, tempStr);//输出上升时间
-				flag1 = !flag1; //不再执行此程序 1表示已经打印过了
-			}
-			else if (flag && isStable(Error2) && !flag2) {
-				ts = t;
-				tempStr.Format(_T("%.2f"), ts);//进行字符串的转换
-				SetDlgItemText(IDC_EDIT13, tempStr);//打印稳定时间
-				flag2 = !flag2;
-				SetDlgItemText(IDC_EDIT1, tempStr);//输出当前比例系数
-				tempStr.Format(_T("系统已稳定"));
-				SetDlgItemText(IDC_EDIT14, tempStr);//输出当前比例系数
-			}
-			else if (isAuto && isStable(Error2) && count > 500) Stop(); //如果在自动调试PID阶段，满足此条件时停止计时器
 		}
 
 		//将图形绘制在界面上(5步打印一次图像)
@@ -375,7 +384,7 @@ void CMyCtrlProjectDlg::OnTimer(UINT_PTR nIDEvent)
 		count += 1;
 		CString tempStr;
 		feedback = 125.0 + peakvalue * sin(frequency*6.28*t);
-		t += (TS/1000);
+		t += 1.5 * (TS/1000);
 		renVal = ZT7660_AIonce(1, 0, 21, 2, 0, 0, 0, 0, 0, 0, 0) / 40;
 
 		Error1 = feedback - renVal;//Calculate E(k)
@@ -388,7 +397,7 @@ void CMyCtrlProjectDlg::OnTimer(UINT_PTR nIDEvent)
 
 		// 设置死区范围为正负2500
 		if (Output > 0) Output = Output + 2500;
-		else Output = 2 * (Output - 2500);
+		else Output = 1.5 * (Output - 2500);
 
 		ZT7660_AOonce(1, 1, 6, Output);
 
@@ -585,22 +594,36 @@ bool CMyCtrlProjectDlg::isMAX(float Error1, float Error2, float Error3)
 	else return false;
 }
 
+int CMyCtrlProjectDlg::findMAX(float nums[])
+{
+	// TODO: 在此添加控件通知处理程序代码
+	float maxVal = 0;
+	int maxIndex = 0;
+	for (int i = 0; i < POINT_COUNT; ++i) {
+		if (nums[i] > maxVal) {
+			maxVal = nums[i];
+			maxIndex = i;
+		}
+	}
+	return maxIndex;
+}
+
 bool CMyCtrlProjectDlg::isStable(float Error)
 {
 	if (abs(Error) < 0.05 * stepvalue + 0.001) return true;
 	else return false;
 }
 
-void CMyCtrlProjectDlg::Print_PID() //打印PID
-{
-	CString tempStr;
-	tempStr.Format(_T("%.2f"), Kp);//进行字符串的转换
-	SetDlgItemText(IDC_EDIT1, tempStr);
-	tempStr.Format(_T("%.2f"), Ki);//进行字符串的转换
-	SetDlgItemText(IDC_EDIT2, tempStr);
-	tempStr.Format(_T("%.2f"), Kd);//进行字符串的转换
-	SetDlgItemText(IDC_EDIT3, tempStr);
-}
+//void CMyCtrlProjectDlg::Print_PID() //打印PID
+//{
+//	CString tempStr;
+//	tempStr.Format(_T("%.2f"), Kp);//进行字符串的转换
+//	SetDlgItemText(IDC_EDIT1, tempStr);
+//	tempStr.Format(_T("%.2f"), Ki);//进行字符串的转换
+//	SetDlgItemText(IDC_EDIT2, tempStr);
+//	tempStr.Format(_T("%.2f"), Kd);//进行字符串的转换
+//	SetDlgItemText(IDC_EDIT3, tempStr);
+//}
 
 //void CMyCtrlProjectDlg::Print_sigma() //打印超调量和上升时间以及稳定时间
 //{
