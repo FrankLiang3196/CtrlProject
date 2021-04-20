@@ -310,27 +310,32 @@ void CMyCtrlProjectDlg::OnTimer(UINT_PTR nIDEvent)
 		integral = Error1 + integral;//积分环节
 
 		if (isMAX(Error1, Error2, Error3)) {
-			if (flag && !flag1) {
-				sigma = abs(Error1) / stepvalue * 100;
-				tempStr.Format(_T("%.2f"), sigma);//进行字符串的转换
-				SetDlgItemText(IDC_EDIT11, tempStr);//输出超调量
-				tp = t;
-				tempStr.Format(_T("%.2f"), tp);//进行字符串的转换
-				SetDlgItemText(IDC_EDIT12, tempStr);//输出上升时间
-				flag1 = !flag1; //不再执行此程序 1表示已经打印过了
-			}
-			else if (flag && isStable(Error2) && !flag2) {
+			//if (flag && !flag1) {
+			//	sigma = abs(Error1) / stepvalue * 100;
+			//	tempStr.Format(_T("%.2f"), sigma);//进行字符串的转换
+			//	SetDlgItemText(IDC_EDIT11, tempStr);//输出超调量
+			//	tp = t;
+			//	tempStr.Format(_T("%.2f"), tp);//进行字符串的转换
+			//	SetDlgItemText(IDC_EDIT12, tempStr);//输出上升时间
+			//	flag1 = !flag1; //不再执行此程序 1表示已经打印过了
+			//}
+		      if (flag && isStable(Error2) && !flag2) {
 
 				int max_i = findMAX(m_nzValues);
-				sigma = abs(m_nzValues[max_i] - stepvalue) / stepvalue * 100;
+
+				sigma = (m_nzValues[max_i] - stepvalue) / stepvalue * 100;
+				if (sigma < 0) sigma = 0;
 				tempStr.Format(_T("%.2f"), sigma);//进行字符串的转换
 				SetDlgItemText(IDC_EDIT11, tempStr);//输出超调量
-				tp = max_i * 5 * TS;
-				tempStr.Format(_T("%.2f"), tp);//进行字符串的转换
-				SetDlgItemText(IDC_EDIT12, tempStr);//输出上升时间
+
 				ts = t;
 				tempStr.Format(_T("%.2f"), ts);//进行字符串的转换
 				SetDlgItemText(IDC_EDIT13, tempStr);//打印稳定时间
+
+				tp = ts - (POINT_COUNT - max_i - 1) * 5 * TS / 1000;
+				tempStr.Format(_T("%.2f"), tp);//进行字符串的转换
+				SetDlgItemText(IDC_EDIT12, tempStr);//输出峰值时间
+
 				flag2 = !flag2;
 				tempStr.Format(_T("系统已稳定"));
 				SetDlgItemText(IDC_EDIT14, tempStr);
@@ -384,7 +389,7 @@ void CMyCtrlProjectDlg::OnTimer(UINT_PTR nIDEvent)
 		count += 1;
 		CString tempStr;
 		feedback = 125.0 + peakvalue * sin(frequency*6.28*t);
-		t += 1.5 * (TS/1000);
+		t += 1.8 * (TS/1000);
 		renVal = ZT7660_AIonce(1, 0, 21, 2, 0, 0, 0, 0, 0, 0, 0) / 40;
 
 		Error1 = feedback - renVal;//Calculate E(k)
@@ -397,7 +402,7 @@ void CMyCtrlProjectDlg::OnTimer(UINT_PTR nIDEvent)
 
 		// 设置死区范围为正负2500
 		if (Output > 0) Output = Output + 2500;
-		else Output = 1.5 * (Output - 2500);
+		else Output = 1.3 * (Output - 2500);
 
 		ZT7660_AOonce(1, 1, 6, Output);
 
@@ -610,7 +615,7 @@ int CMyCtrlProjectDlg::findMAX(float nums[])
 
 bool CMyCtrlProjectDlg::isStable(float Error)
 {
-	if (abs(Error) < 0.05 * stepvalue + 0.001) return true;
+	if (abs(Error) < 0.02 * stepvalue + 0.001) return true;
 	else return false;
 }
 
